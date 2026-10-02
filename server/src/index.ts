@@ -1,5 +1,6 @@
 import express from 'express';
 import { approve, assets, budgetLines, contracts, createApproval, dashboard, projectSummary, projects, rightsConflicts } from './domain.js';
+import { cancelReschedule, confirmReschedule, previewReschedule, projectRescheduleAudit, RescheduleError } from './reschedule.js';
 const app = express(); app.use(express.json());
 app.get('/api/dashboard', (_req, res) => res.json(dashboard()));
 app.get('/api/projects', (_req, res) => res.json(projects));
@@ -7,6 +8,19 @@ app.get('/api/projects/:id/summary', (req, res) => { const result = projectSumma
 app.get('/api/projects/:id/rights-conflicts', (req, res) => res.json(rightsConflicts(req.params.id)));
 app.get('/api/projects/:id/assets', (req, res) => res.json(assets.filter(asset => asset.projectId === req.params.id)));
 app.get('/api/projects/:id/contracts', (req, res) => res.json(contracts.filter(contract => contract.projectId === req.params.id)));
+app.get('/api/projects/:id/reschedule-audit', (req, res) => res.json(projectRescheduleAudit(req.params.id)));
+app.post('/api/projects/:id/reschedule/preview', (req, res) => {
+  try { res.status(201).json(previewReschedule({ projectId: req.params.id, newDate: req.body.newDate, reason: req.body.reason, requestedBy: req.body.requestedBy })); }
+  catch (error) { if (error instanceof RescheduleError) return res.status(error.status).json({ message: error.message, code: error.code }); throw error; }
+});
+app.post('/api/projects/:id/reschedule/confirm', (req, res) => {
+  try { res.json(confirmReschedule({ token: req.body.token, confirmRegression: req.body.confirmRegression, actor: req.body.actor })); }
+  catch (error) { if (error instanceof RescheduleError) return res.status(error.status).json({ message: error.message, code: error.code }); throw error; }
+});
+app.delete('/api/projects/:id/reschedule/preview/:token', (req, res) => {
+  try { res.json(cancelReschedule(req.params.token)); }
+  catch (error) { if (error instanceof RescheduleError) return res.status(error.status).json({ message: error.message, code: error.code }); throw error; }
+});
 app.get('/api/budgets/:projectId/lines', (req, res) => res.json(budgetLines.filter(line => line.projectId === req.params.projectId)));
 app.post('/api/approvals', (req, res) => res.status(201).json(createApproval(req.body)));
 app.patch('/api/approvals/:id', (req, res) => { const result = approve(req.params.id, req.body.status, req.body.comment); if (!result) return res.status(404).json({ message: '审批不存在' }); res.json(result); });
